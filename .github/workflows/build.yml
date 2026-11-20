@@ -48,6 +48,7 @@ jobs:
             arch: x64
             artifact_name: brodgsi-macos-x64
             archive_ext: tar.gz
+            allow_fail: true
 
           # macOS ARM64 (Apple Silicon)
           - os: macos-latest
@@ -81,7 +82,7 @@ jobs:
         run: |
           python build_binaries.py
 
-      - name: Package Release Archives (Full and Standalone)
+      - name: Package Release Archives
         run: |
           python scripts/package.py --name ${{ matrix.artifact_name }}-standalone --format ${{ matrix.archive_ext }}
           python scripts/package.py --name ${{ matrix.artifact_name }} --format ${{ matrix.archive_ext }} --include-patches
@@ -135,7 +136,7 @@ jobs:
   release:
     name: Publish to GitHub Releases
     needs: [build-native, build-linux-arm64]
-    if: github.event_name != 'pull_request'
+    if: always() && !cancelled() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -144,8 +145,21 @@ jobs:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release-assets
-          merge-multiple: true
+          path: raw-artifacts
+
+      - name: Flatten and verify release assets
+        id: prep
+        run: |
+          mkdir -p release-files
+          find raw-artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec cp -fv {} release-files/ \;
+          echo "=== Collected release archives ==="
+          ls -lh release-files/
+          total_files=$(ls -1 release-files/ | wc -l)
+          echo "Total files: $total_files"
+          if [ "$total_files" -eq 0 ]; then
+            echo "::error::No build archives found to upload!"
+            exit 1
+          fi
 
       - name: Set Release Variables
         id: vars
@@ -164,10 +178,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.vars.outputs.release_name }}
           prerelease: ${{ steps.vars.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
-          files: |
-            release-assets/*
+          fail_on_unmatched_files: true
+          files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

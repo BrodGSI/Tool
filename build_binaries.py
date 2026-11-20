@@ -53,9 +53,11 @@ def run_pyinstaller(name: str, entrypoint: str, is_gui: bool = False, onefile: b
     else:
         cmd.append("--console")
 
-    if os.path.isfile("icon.ico") and sys.platform == "win32":
+    if sys.platform == "win32" and os.path.isfile("icon.ico"):
         cmd.extend(["--icon", "icon.ico"])
-    elif os.path.isfile("icon.png"):
+    elif sys.platform == "darwin" and os.path.isfile("icon.icns"):
+        cmd.extend(["--icon", "icon.icns"])
+    elif sys.platform not in ("win32", "darwin") and os.path.isfile("icon.png"):
         cmd.extend(["--icon", "icon.png"])
 
     for data in DATA_ENTRIES:
@@ -86,9 +88,15 @@ def main():
     # Ensure dependencies
     import importlib.util
 
+    needed = []
     if importlib.util.find_spec("PyInstaller") is None:
-        print("[*] PyInstaller not found, installing...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+        needed.append("pyinstaller")
+    if importlib.util.find_spec("PIL") is None:
+        needed.append("pillow")
+
+    if needed:
+        print(f"[*] Installing build tools: {needed}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", *needed])
 
     build_cli = not args.gui_only
     build_gui = not args.cli_only

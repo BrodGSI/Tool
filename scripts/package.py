@@ -71,7 +71,7 @@ def main():
         print("[*] Added tools/ directory")
 
     # 3. Copy docs, license & icons
-    for doc in ("README.md", "LICENSE", "AUTHORS", "NOTICE", "icon.png", "icon.ico"):
+    for doc in ("README.md", "LICENSE", "AUTHORS", "NOTICE", "icon.png", "icon.ico", "icon.icns"):
         if os.path.isfile(doc):
             shutil.copy2(doc, os.path.join(pkg_dir, doc))
 

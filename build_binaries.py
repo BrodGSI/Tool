@@ -9,8 +9,6 @@ import sys
 SEP = ";" if os.name == "nt" else ":"
 
 DATA_ENTRIES = [
-    f"patches{SEP}patches",
-    f"tools/bin{SEP}tools/bin",
     f"tools/apktool{SEP}tools/apktool",
     f"tools/avb{SEP}tools/avb",
     f"tools/image/mke2fs.conf{SEP}tools/image",

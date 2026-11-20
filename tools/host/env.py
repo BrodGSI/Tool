@@ -4,10 +4,14 @@ import shutil
 import subprocess
 import sys
 
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    REPO_ROOT = sys._MEIPASS
-elif getattr(sys, "frozen", False):
-    REPO_ROOT = os.path.dirname(os.path.abspath(sys.executable))
+if getattr(sys, "frozen", False):
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    if os.path.isdir(os.path.join(exe_dir, "tools", "bin")):
+        REPO_ROOT = exe_dir
+    elif hasattr(sys, "_MEIPASS") and os.path.isdir(os.path.join(sys._MEIPASS, "tools", "bin")):
+        REPO_ROOT = sys._MEIPASS
+    else:
+        REPO_ROOT = exe_dir
 else:
     REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BIN_ROOT = os.path.join(REPO_ROOT, "tools", "bin")
@@ -107,7 +111,14 @@ def _configure_windows_output() -> None:
 def configure_environment() -> None:
     """Configure native tool paths and Windows UTF-8 output."""
     system = platform.system()
-    paths = [os.path.join(BIN_ROOT, system, platform.machine()), BIN_ROOT]
+    machine = platform.machine()
+    paths = [os.path.join(BIN_ROOT, system, machine), BIN_ROOT]
+    if system == "Windows" and machine.upper() == "ARM64":
+        paths.insert(0, os.path.join(BIN_ROOT, system, "AMD64"))
+    elif system == "Linux" and machine.lower() in ("arm64", "aarch64"):
+        paths.insert(0, os.path.join(BIN_ROOT, system, "aarch64"))
+    elif system == "Darwin" and machine.lower() in ("arm64", "aarch64"):
+        paths.insert(0, os.path.join(BIN_ROOT, system, "arm64"))
     if system == "Darwin":
         paths.extend(_brew_paths())
     elif system == "Windows":

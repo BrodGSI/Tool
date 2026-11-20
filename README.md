@@ -198,7 +198,12 @@ This generates:
 - `dist/brodgsi-gui` (`brodgsi-gui.exe` on Windows) — windowed monochrome GUI
 - `dist/brodgsi-cli` (`brodgsi-cli.exe` on Windows) — command line tool
 
-GitHub Actions builds both GUI and CLI executables automatically on every commit for Windows (x86_64), Linux (x86_64), and macOS. You can download pre-built packages directly from GitHub Actions workflow runs or GitHub Releases.
+GitHub Actions builds both GUI and CLI executables automatically on every commit for:
+- **Windows**: x64 (`brodgsi-windows-x64.zip`) & ARM64 (`brodgsi-windows-arm64.zip`)
+- **Linux**: x64 (`brodgsi-linux-x64.tar.gz`) & ARM64 (`brodgsi-linux-arm64.tar.gz`)
+- **macOS**: Intel x64 (`brodgsi-macos-x64.tar.gz`) & Apple Silicon ARM64 (`brodgsi-macos-arm64.tar.gz`)
+
+You can download pre-built packages directly from GitHub Actions workflow runs or GitHub Releases.
 
 On Windows, run from the repository root:
 

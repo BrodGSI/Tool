@@ -13,6 +13,8 @@ DATA_ENTRIES = [
     f"tools/avb{SEP}tools/avb",
     f"tools/image/mke2fs.conf{SEP}tools/image",
 ]
+if os.path.isfile("icon.png"):
+    DATA_ENTRIES.append(f"icon.png{SEP}icon.png")
 
 HIDDEN_IMPORTS = [
     "requests",
@@ -50,6 +52,11 @@ def run_pyinstaller(name: str, entrypoint: str, is_gui: bool = False, onefile: b
         cmd.append("--noconsole")
     else:
         cmd.append("--console")
+
+    if os.path.isfile("icon.ico") and sys.platform == "win32":
+        cmd.extend(["--icon", "icon.ico"])
+    elif os.path.isfile("icon.png"):
+        cmd.extend(["--icon", "icon.png"])
 
     for data in DATA_ENTRIES:
         cmd.extend(["--add-data", data])

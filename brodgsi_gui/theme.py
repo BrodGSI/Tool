@@ -1,4 +1,4 @@
-"""Monochrome Theme Engine for BrodGSI GUI."""
+"""Theme Engine for BrodGSI GUI (Black & Neon Green and Monochrome themes)."""
 
 import subprocess
 import sys
@@ -34,7 +34,6 @@ def detect_system_dark_mode() -> bool:
             return False
 
     else:
-        # Linux (GNOME/XFCE/KDE check)
         try:
             res = subprocess.run(
                 ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
@@ -51,6 +50,38 @@ def detect_system_dark_mode() -> bool:
     return False
 
 
+# Primary theme: Black & Neon Green
+NEON_PALETTE = {
+    "name": "neon",
+    "bg": "#0a0d0a",
+    "surface": "#101610",
+    "card": "#131a13",
+    "border": "#00ff66",
+    "border_focus": "#39ff14",
+    "fg": "#00ff66",
+    "fg_bright": "#39ff14",
+    "fg_text": "#e2ffe2",
+    "fg_dim": "#009933",
+    "btn_bg": "#101810",
+    "btn_fg": "#00ff66",
+    "btn_hover": "#003814",
+    "btn_active": "#005520",
+    "btn_border": "#00ff66",
+    "btn_primary_bg": "#00ff66",
+    "btn_primary_fg": "#000000",
+    "btn_primary_hover": "#39ff14",
+    "btn_primary_active": "#00cc55",
+    "entry_bg": "#0c120c",
+    "entry_fg": "#00ff66",
+    "entry_border": "#00cc55",
+    "console_bg": "#060906",
+    "console_fg": "#00ff66",
+    "select_bg": "#005520",
+    "select_fg": "#00ff66",
+    "progress_bg": "#141c14",
+    "progress_fill": "#00ff66",
+}
+
 DARK_PALETTE = {
     "name": "dark",
     "bg": "#111111",
@@ -59,6 +90,8 @@ DARK_PALETTE = {
     "border": "#3a3a3a",
     "border_focus": "#ffffff",
     "fg": "#ffffff",
+    "fg_bright": "#ffffff",
+    "fg_text": "#ffffff",
     "fg_dim": "#8c8c8c",
     "btn_bg": "#222222",
     "btn_fg": "#ffffff",
@@ -88,6 +121,8 @@ LIGHT_PALETTE = {
     "border": "#d0d0d0",
     "border_focus": "#000000",
     "fg": "#000000",
+    "fg_bright": "#000000",
+    "fg_text": "#000000",
     "fg_dim": "#666666",
     "btn_bg": "#eeeeee",
     "btn_fg": "#000000",
@@ -110,33 +145,47 @@ LIGHT_PALETTE = {
 }
 
 
-class ThemeManager:
-    """Manages active monochrome theme and widget updates."""
+def colorize_tree(widget, bg, fg=None):
+    """Recursively traverses widget tree and sets background on frames/containers."""
+    try:
+        w_class = widget.winfo_class()
+        if w_class in ("Frame", "Labelframe", "Canvas"):
+            widget.config(bg=bg)
+    except Exception:
+        pass
+    for child in widget.winfo_children():
+        colorize_tree(child, bg, fg)
 
-    def __init__(self, initial_pref: str = "system"):
-        self.preference = initial_pref  # "system", "dark", "light"
-        self.colors = self._resolve_palette(initial_pref)
+
+class ThemeManager:
+    """Manages active color theme and widget styling."""
+
+    def __init__(self, initial_pref: str = "neon"):
+        self.preference = initial_pref or "neon"
+        self.colors = self._resolve_palette(self.preference)
         self.listeners = []
 
     def _resolve_palette(self, pref: str) -> dict:
-        if pref == "dark":
+        if pref == "neon":
+            return NEON_PALETTE
+        elif pref == "dark":
             return DARK_PALETTE
         elif pref == "light":
             return LIGHT_PALETTE
-        # "system"
-        return DARK_PALETTE if detect_system_dark_mode() else LIGHT_PALETTE
+        elif pref == "system":
+            return NEON_PALETTE if detect_system_dark_mode() else LIGHT_PALETTE
+        return NEON_PALETTE
 
     def set_preference(self, pref: str):
         self.preference = pref
-        new_colors = self._resolve_palette(pref)
-        self.colors = new_colors
+        self.colors = self._resolve_palette(pref)
         self._notify()
 
     def get_preference(self) -> str:
         return self.preference
 
     def is_dark(self) -> bool:
-        return self.colors["name"] == "dark"
+        return self.colors["name"] in ("neon", "dark")
 
     def add_listener(self, cb):
         if cb not in self.listeners:
@@ -155,7 +204,7 @@ class ThemeManager:
 
 
 class BwButton(tk.Frame):
-    """Clean flat monochrome button with high contrast borders."""
+    """High contrast neon/monochrome flat button."""
 
     def __init__(
         self,
@@ -175,7 +224,11 @@ class BwButton(tk.Frame):
         self.is_hovered = False
         self.is_pressed = False
         self.state_enabled = True
-        self.font = font or ("Segoe UI" if sys.platform == "win32" else "TkDefaultFont", 10, "bold" if primary else "normal")
+        self.font = font or (
+            "Segoe UI" if sys.platform == "win32" else "TkDefaultFont",
+            10,
+            "bold" if primary else "normal",
+        )
 
         super().__init__(parent, highlightthickness=1, cursor="hand2", **kwargs)
 
@@ -243,11 +296,11 @@ class BwButton(tk.Frame):
         self._update_colors()
 
     def _update_colors(self):
-        c = getattr(self, "colors", DARK_PALETTE)
+        c = getattr(self, "colors", NEON_PALETTE)
         if not self.state_enabled:
             bg = c["surface"]
             fg = c["fg_dim"]
-            border = c["border"]
+            border = c["surface"]
         elif self.primary:
             if self.is_pressed:
                 bg = c["btn_primary_active"]
@@ -272,12 +325,12 @@ class BwButton(tk.Frame):
 
 
 class BwProgressBar(tk.Canvas):
-    """Monochrome custom canvas progress bar."""
+    """Custom canvas progress bar."""
 
     def __init__(self, parent, height=14, theme_mgr=None, **kwargs):
         self.theme_mgr = theme_mgr
-        self.value = 0.0  # 0 to 100
-        self.colors = DARK_PALETTE
+        self.value = 0.0
+        self.colors = NEON_PALETTE
         super().__init__(parent, height=height, highlightthickness=1, **kwargs)
         self.bind("<Configure>", lambda e: self._draw())
         if self.theme_mgr:

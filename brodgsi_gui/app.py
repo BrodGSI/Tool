@@ -1,5 +1,6 @@
 """Main application window and screen router for BrodGSI GUI."""
 
+import os
 import sys
 import tkinter as tk
 
@@ -17,10 +18,45 @@ from .views.menu import BuildSubmenuView, MainMenuView
 from .views.rebuild_view import RebuildView
 
 
+def _find_icon_path() -> str | None:
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    p1 = os.path.join(exe_dir, "icon.png")
+    if os.path.isfile(p1):
+        return p1
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        p2 = os.path.join(meipass, "icon.png")
+        if os.path.isfile(p2):
+            return p2
+    p3 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icon.png"))
+    if os.path.isfile(p3):
+        return p3
+    if os.path.isfile("icon.png"):
+        return os.path.abspath("icon.png")
+    return None
+
+
 class BrodGsiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.settings = AppSettings()
+
+        # Set application icon
+        self.icon_image = None
+        icon_path = _find_icon_path()
+        if icon_path:
+            try:
+                self.icon_image = tk.PhotoImage(file=icon_path)
+                self.root.iconphoto(True, self.icon_image)
+            except Exception:
+                pass
+            if sys.platform == "win32":
+                ico_path = icon_path.replace(".png", ".ico")
+                if os.path.isfile(ico_path):
+                    try:
+                        self.root.iconbitmap(ico_path)
+                    except Exception:
+                        pass
 
         # Initialize managers
         self.theme_mgr = ThemeManager(self.settings.theme)

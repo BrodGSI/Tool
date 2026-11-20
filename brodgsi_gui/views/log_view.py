@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tkinter as tk
 
-from ..theme import BwButton, BwProgressBar
+from ..theme import BwButton, BwProgressBar, colorize_tree
 
 
 def open_system_folder(path: str):
@@ -202,13 +202,8 @@ class LogView(tk.Frame):
         console_bg = colors["console_bg"]
         console_fg = colors["console_fg"]
 
+        colorize_tree(self, bg)
         self.config(bg=bg)
-        for child in self.winfo_children():
-            if isinstance(child, tk.Frame):
-                child.config(bg=bg)
-                for sub in child.winfo_children():
-                    if isinstance(sub, tk.Frame):
-                        sub.config(bg=bg)
 
         self.lbl_title.config(bg=bg, fg=fg)
         self.lbl_pct.config(bg=bg, fg=fg)

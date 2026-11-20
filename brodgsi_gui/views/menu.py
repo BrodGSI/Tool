@@ -3,7 +3,7 @@
 import sys
 import tkinter as tk
 
-from ..theme import BwButton
+from ..theme import BwButton, colorize_tree
 
 
 class MainMenuView(tk.Frame):
@@ -100,6 +100,7 @@ class MainMenuView(tk.Frame):
         fg = colors["fg"]
         fg_dim = colors["fg_dim"]
 
+        colorize_tree(self, bg)
         self.config(bg=bg)
         self.box.config(bg=bg)
         self.title_lbl.config(bg=bg, fg=fg)
@@ -204,6 +205,7 @@ class BuildSubmenuView(tk.Frame):
         fg = colors["fg"]
         fg_dim = colors["fg_dim"]
 
+        colorize_tree(self, bg)
         self.config(bg=bg)
         self.box.config(bg=bg)
         self.title_lbl.config(bg=bg, fg=fg)

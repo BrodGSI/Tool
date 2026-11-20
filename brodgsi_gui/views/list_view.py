@@ -7,7 +7,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from ..theme import BwButton
+from ..theme import BwButton, colorize_tree
 
 GSILIST_PATH = "tmp/gsilist.json"
 
@@ -206,10 +206,8 @@ class ListView(tk.Frame):
         surf = colors["surface"]
         border = colors["border"]
 
+        colorize_tree(self, bg)
         self.config(bg=bg)
-        for child in self.winfo_children():
-            if isinstance(child, tk.Frame):
-                child.config(bg=bg)
 
         self.title_lbl.config(bg=bg, fg=fg)
         self.desc_lbl.config(bg=bg, fg=fg_dim)

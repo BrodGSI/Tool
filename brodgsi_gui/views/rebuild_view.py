@@ -6,7 +6,7 @@ import sys
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-from ..theme import BwButton
+from ..theme import BwButton, colorize_tree
 
 GSILIST_PATH = "tmp/gsilist.json"
 
@@ -189,10 +189,8 @@ class RebuildView(tk.Frame):
         entry_bg = colors["entry_bg"]
         entry_fg = colors["entry_fg"]
 
+        colorize_tree(self, bg)
         self.config(bg=bg)
-        for child in self.winfo_children():
-            if isinstance(child, tk.Frame):
-                child.config(bg=bg)
 
         self.title_lbl.config(bg=bg, fg=fg)
         self.desc_lbl.config(bg=bg, fg=fg_dim)

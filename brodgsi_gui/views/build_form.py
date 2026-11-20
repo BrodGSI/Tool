@@ -8,7 +8,7 @@ from tkinter import filedialog, ttk
 
 import tools
 
-from ..theme import BwButton
+from ..theme import BwButton, colorize_tree
 
 ROM_TYPES = [
     "auto",
@@ -440,8 +440,9 @@ class BuildFormView(tk.Frame):
         entry_bg = colors["entry_bg"]
         entry_fg = colors["entry_fg"]
 
+        colorize_tree(self, bg)
         self.config(bg=bg)
-        self.canvas.config(bg=bg)
+        self.canvas.config(bg=bg, highlightbackground=bg)
         self.scroll_frame.config(bg=bg)
         self.lbl_src.config(bg=bg, fg=fg)
         self.lbl_name.config(bg=bg, fg=fg)

@@ -70,8 +70,8 @@ def main():
         shutil.copytree("tools", os.path.join(pkg_dir, "tools"))
         print("[*] Added tools/ directory")
 
-    # 3. Copy docs & license
-    for doc in ("README.md", "LICENSE", "AUTHORS", "NOTICE"):
+    # 3. Copy docs, license & icons
+    for doc in ("README.md", "LICENSE", "AUTHORS", "NOTICE", "icon.png", "icon.ico"):
         if os.path.isfile(doc):
             shutil.copy2(doc, os.path.join(pkg_dir, doc))
 

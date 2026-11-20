@@ -17,7 +17,7 @@ def get_config_path() -> str:
 class AppSettings:
     def __init__(self):
         self.path = get_config_path()
-        self.theme = "system"
+        self.theme = "neon"
         self.language = "system"
         self.last_rom_type = "auto"
         self.last_fs_format = "ext4"

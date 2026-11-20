@@ -95,12 +95,12 @@ class SettingsDialog(tk.Toplevel):
 
         self.theme_radios = []
         for val, key in (
-            ("system", "settings_theme_system"),
+            ("neon", "settings_theme_neon"),
             ("dark", "settings_theme_dark"),
             ("light", "settings_theme_light"),
+            ("system", "settings_theme_system"),
         ):
-            active_name = "Dark" if self.theme_mgr.is_dark() else "Light"
-            text = self.i18n.t(key, theme=active_name)
+            text = self.i18n.t(key)
             rb = tk.Radiobutton(
                 self.container,
                 text=text,
@@ -170,8 +170,7 @@ class SettingsDialog(tk.Toplevel):
 
         self.theme_lbl.config(text=self.i18n.t("settings_theme_label"))
         for rb, val, key in self.theme_radios:
-            active_name = "Dark" if self.theme_mgr.is_dark() else "Light"
-            rb.config(text=self.i18n.t(key, theme=active_name))
+            rb.config(text=self.i18n.t(key))
 
         self.tools_box.config(text=f" {self.i18n.t('settings_tools_status')} ")
         self.btn_save.set_text(self.i18n.t("btn_save_close"))

@@ -1,0 +1,277 @@
+# BrodGSI
+
+A tool to build a GSI (Generic System Image) from stock Android firmware.
+
+Supported firmware: 
+- full OTA zips (`payload.bin`)  
+- fastboot packages  
+- `super.img`, sparse images  
+- `system.new.dat`  
+- Samsung tars  
+- Huawei `UPDATE.APP`  
+- Unisoc `.pac`  
+- LG `.kdz`  
+- Oppo `.ozip`  
+- QFIL packages  
+- Sony `.sin`  
+- Pixel factory images  
+
+Partitions can be ext4, EROFS or F2FS.
+
+## Setup
+
+This project requires Python 3.10+.
+
+### Automatic setup
+
+#### macOS / Linux
+
+On macOS, install Homebrew and Xcode Command Line Tools first.
+
+```sh
+git clone https://github.com/BrodGSI/brodgsi.git && cd brodgsi
+./setup_host.py
+```
+
+#### Windows
+
+Install Python 3 and Git if you haven't already. Make sure both are added to PATH.
+We recommend using WinGet:
+
+```cmd
+winget install --id Python.Python.3.14 --exact --source winget
+winget install --id Git.Git --exact --source winget
+```
+
+```cmd
+git clone https://github.com/BrodGSI/brodgsi.git && cd brodgsi
+python setup_host.py
+```
+
+On macOS, Debian/Ubuntu, Arch, Fedora, openSUSE and Windows, the script installs system packages and
+creates `.venv`. On NixOS, it checks the development shell. Native image
+tools and the Apktool JAR are bundled with the repository.
+
+### Manual setup
+
+Swap `requirements.txt` for `requirements-dev.txt` if you want the dev tools.
+The bundled Apktool JAR needs Java; native image tools are under
+`tools/bin/<platform>/<architecture>`.
+
+<details>
+<summary>macOS</summary>
+
+```sh
+xcode-select --install
+brew install python@3.13 curl aria2 gpatch openssl@3 openjdk@17
+export PATH="$(brew --prefix openjdk@17)/bin:$PATH"
+"$(brew --prefix python@3.13)/bin/python3.13" -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+</details>
+
+<details>
+<summary>Ubuntu / Debian</summary>
+
+```sh
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip curl aria2 \
+    openssl patch ca-certificates libarchive-tools default-jre-headless
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+</details>
+
+<details>
+<summary>Arch</summary>
+
+```sh
+sudo pacman -Syu --needed python python-pip curl aria2 openssl patch \
+    libarchive jre17-openjdk-headless
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+</details>
+
+<details>
+<summary>Fedora and others (RHEL, etc)</summary>
+
+```sh
+sudo dnf update -y
+sudo dnf install -y --skip-unavailable python3 python3-pip curl aria2 openssl patch \
+    ca-certificates libarchive java-openjdk-headless
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+</details>
+
+<details>
+<summary>openSUSE (Tumbleweed, Leap)</summary>
+
+```sh
+sudo zypper refresh
+sudo zypper install -y --no-recommends python3 python3-base curl aria2 openssl patch \
+    ca-certificates bsdtar 7zip erofs-utils e2fsprogs java-21-openjdk-headless
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Python is versioned on openSUSE (`python313`, `python313-base`); the `python3`
+names resolve to whichever version is current. `python3 -m venv` already
+bundles pip, so `python3-pip` is not needed. On Leap, use
+`java-17-openjdk-headless` if `java-21-openjdk-headless` is unavailable.
+
+</details>
+
+<details>
+<summary>NixOS</summary>
+
+```sh
+nix --extra-experimental-features 'nix-command flakes' develop
+python3 cli.py build <name> <firmware> --type <type>
+```
+
+</details>
+
+<details>
+<summary>Windows</summary>
+
+```cmd
+winget install --id 7zip.7zip --exact --source winget
+winget install --id aria2.aria2 --exact --source winget
+winget install --id EclipseAdoptium.Temurin.26.JDK --exact --source winget
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+</details>
+
+
+
+## Usage
+
+### Graphical User Interface (GUI)
+
+BrodGSI includes a clean, monochrome (black & white) graphical user interface without colored buttons or emojis.
+
+Key features:
+- **Themes**: Dark theme, Light theme, or System default theme (follows OS dark/light mode automatically).
+- **Languages**: English and Russian (defaults automatically to your operating system language, switchable in Settings).
+- **Navigation**: Settings button `[ ⚙ ]` in the top right header, organized submenus (e.g. `Build GSI` -> `Build from File` or `Build from URL`), real-time progress bar, and live console output.
+- **Full CLI parity**: all build, rebuild, list, debloat, format, partition, and AVB signing options are available directly in GUI.
+
+To launch the GUI:
+```sh
+python gui.py
+# or
+python main.py
+```
+
+### Command Line Interface (CLI)
+
+```sh
+python cli.py build <name> <firmware|URL> [--type <type>] [--format <lz4|lz4hc|lzma>] [--compress]
+python cli.py rebuild <name> [--compress]
+python cli.py list
+python cli.py clean
+```
+
+Or using the universal entry point:
+```sh
+python main.py build <name> <firmware|URL>
+python main.py list
+```
+
+### Standalone Executables (Windows, Linux, macOS)
+
+You can build standalone binaries for both GUI and CLI without needing Python installed on the target machine:
+
+```sh
+python build_binaries.py
+```
+
+This generates:
+- `dist/brodgsi-gui` (`brodgsi-gui.exe` on Windows) — windowed monochrome GUI
+- `dist/brodgsi-cli` (`brodgsi-cli.exe` on Windows) — command line tool
+
+GitHub Actions builds both GUI and CLI executables automatically on every commit for Windows (x86_64), Linux (x86_64), and macOS. You can download pre-built packages directly from GitHub Actions workflow runs or GitHub Releases.
+
+On Windows, run from the repository root:
+
+```cmd
+.venv\Scripts\python.exe cli.py build test D:\path\to\firmware.tar
+```
+
+F2FS extraction on Windows needs a local NTFS working directory that allows
+case sensitivity. Use an up-to-date Python for Windows directory permissions.
+
+### Commands
+
+```sh
+build - Build a new ROM image
+rebuild - Rebuild an existing ROM image
+list - List all builds
+clean - Clean up all builds
+```
+
+### Command-line options
+
+```sh
+name - Name of the build
+firmware or URL - Path to the firmware or URL to download it from
+--type <type> - ROM type; default is auto (use an explicit type if detection fails)
+--compress - Compress the output image into a ZIP
+--add <tag> - Add a tag to the build name
+--no-debloat - Keep the apps the patch set would otherwise remove
+--no-merge - Build separate images instead of merging partitions into system
+--format <lz4|lz4hc|lzma> - Build EROFS with this compressor instead of ext4
+--avb-key /path/to/key.pem - Sign with the specified RSA private key
+```
+
+By default, an image is signed with AOSP's AVB RSA-2048 test key. You can pass `--avb-key /path/to/key.pem` to sign with your own RSA private key.
+
+To keep separate system and product partitions:
+
+```sh
+.venv/bin/python cli.py build lg firmware.kdz --no-merge --compress
+```
+
+This writes `*-system.img`, `*-product.img`, and images for any other partitions
+normally merged into system. Partitions already inside system stay there.
+The ZIP contains each image as `<partition>.img`; `rebuild` keeps this layout.
+These images require a device that mounts the separate partitions.
+
+By default, images are ext4. `--format` builds EROFS instead, typically
+30-50% smaller: lz4hc saves less than lzma but reads faster on the device.
+The target device's kernel and fstab must support EROFS, and lzma needs
+`CONFIG_EROFS_FS_ZIP_LZMA`. `rebuild` keeps the format of the original build.
+
+Example:
+
+```sh
+.venv/bin/python cli.py build raven \
+    https://dl.google.com/dl/android/aosp/raven-up1a.231105.003-factory-76a795d5.zip \
+    --type pixel --compress
+```
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+```sh
+.venv/bin/ruff check .
+```
+
+Patch files of 50 MiB or more are stored xz-compressed (`<name>.xz`) and unpacked during builds. After adding one, run `./tools/assets.py pack` and commit the `.xz` files (or `.xz.000`, `.xz.001`, ... for split archives).  
+
+`./tools/assets.py status` shows what's packed.
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). Bundled avbtool is MIT-licensed;
+see [tools/avb/LICENSE](tools/avb/LICENSE). Third-party files under `patches/`
+have separate terms; see [NOTICE](NOTICE).

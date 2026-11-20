@@ -1,0 +1,366 @@
+"""
+Builds the system image: ext4 with mke2fs and e2fsdroid, or EROFS with
+mkfs.erofs.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Optional
+
+import fsops
+
+from ..config import BLOCK_SIZE
+from ..host import configure_environment, find_tool
+from .contexts import prepare_file_contexts
+
+EROFS_COMPRESSORS = ("lz4", "lz4hc", "lzma")
+DEFAULT_TIMESTAMP = "1230768000"
+def _find_mke2fs_config() -> str:
+    p = Path(__file__).resolve().with_name("mke2fs.conf")
+    if p.is_file():
+        return p.as_posix()
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        mp = Path(meipass) / "tools" / "image" / "mke2fs.conf"
+        if mp.is_file():
+            return mp.as_posix()
+    exe_dir = Path(sys.executable).resolve().parent
+    ep = exe_dir / "tools" / "image" / "mke2fs.conf"
+    if ep.is_file():
+        return ep.as_posix()
+    return p.as_posix()
+
+
+MKE2FS_CONFIG = _find_mke2fs_config()
+STUB_DIRS = ("persist", "dsp", "cache")
+FS_CONFIG_FILES = ("fs_config_files", "fs_config_dirs")
+# Partitions merged into the GSI's system tree whose own fs_config tables
+# still apply (libcutils maps system/<partition>/... onto <partition>/...).
+MERGED_PARTITIONS = ("product", "system_ext")
+
+
+def clean_stub_directories(system_dir: str):
+    """Replaces the stub mountpoints in system_dir with empty directories."""
+    for stub in STUB_DIRS:
+        stub_path = os.path.join(system_dir, stub)
+        if os.path.isdir(stub_path) and not fsops.islink(stub_path):
+            shutil.rmtree(stub_path, ignore_errors=True)
+        elif os.path.lexists(stub_path):
+            try:
+                os.remove(stub_path)
+            except OSError:
+                pass
+        os.makedirs(stub_path, exist_ok=True)
+
+
+def _fs_config_root(
+    source_dir: str,
+    staging_dir: str,
+    partition_dirs: Optional[dict[str, str]] = None,
+) -> str:
+    """
+    Lays out the ROM's fs_config tables where e2fsdroid's -p looks for them
+    (<root>/<partition>/etc/fs_config_*), so the image gets the stock
+    owners, modes and capabilities. Returns the path to pass as -p.
+    """
+    root = os.path.join(staging_dir, "fs_config")
+    shutil.rmtree(root, ignore_errors=True)
+    sources = {"system": os.path.join(source_dir, "system", "etc")}
+    for part in MERGED_PARTITIONS:
+        sources[part] = os.path.join(source_dir, "system", part, "etc")
+    for part, path in (partition_dirs or {}).items():
+        etc = os.path.join(path, "etc")
+        if part == "system" and os.path.isdir(os.path.join(path, "system")):
+            etc = os.path.join(path, "system", "etc")
+        sources[part] = etc
+
+    for part, etc in sources.items():
+        for name in FS_CONFIG_FILES:
+            src = os.path.join(etc, name)
+            if os.path.isfile(src):
+                dst_dir = os.path.join(root, part, "etc")
+                os.makedirs(dst_dir, exist_ok=True)
+                shutil.copyfile(src, os.path.join(dst_dir, name))
+    # libcutils strips a trailing "/system" to find the other partitions.
+    return os.path.join(root, "system")
+
+
+def _run_step(name, cmd, env, output_image, log) -> int:
+    res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if res.returncode != 0:
+        log(
+            f"{name} failed with exit code {res.returncode}:\n"
+            f"{res.stdout}\n{res.stderr}"
+        )
+        try:
+            os.remove(output_image)
+        except OSError:
+            pass
+    return res.returncode
+
+
+def _prepare_source(source_dir: str, mount_point: str) -> None:
+    if mount_point == "/":
+        clean_stub_directories(source_dir)
+
+    # Keep mke2fs's root-owned directory instead of copying host metadata.
+    lost_found = os.path.join(source_dir, "lost+found")
+    if (
+        os.path.isdir(lost_found)
+        and not fsops.islink(lost_found)
+        and not os.listdir(lost_found)
+    ):
+        os.rmdir(lost_found)
+
+
+def _file_contexts(
+    source_dir: str,
+    work_dir: str,
+    stock_labels_path: Optional[str],
+    mount_point: str,
+    partition_dirs: Optional[dict[str, str]],
+) -> Optional[str]:
+    stock_labels = None
+    if stock_labels_path and os.path.isfile(stock_labels_path):
+        with open(stock_labels_path, encoding="utf-8") as f:
+            stock_labels = json.load(f)
+    return prepare_file_contexts(
+        source_dir,
+        os.path.join(work_dir, "file_contexts"),
+        stock_labels,
+        context_dirs=[
+            os.path.join(path, relative)
+            for path in (partition_dirs or {}).values()
+            for relative in ("etc/selinux", "system/etc/selinux")
+        ],
+        mount_point=mount_point,
+    )
+
+
+def _strip_host_xattrs(source_dir: str) -> None:
+    """
+    mkfs.erofs copies the build host's xattrs, such as POSIX ACLs, into the
+    image; e2fsdroid never does. It already skips the host's SELinux labels
+    when given file_contexts, and those can't be removed anyway.
+    """
+    if not hasattr(os, "listxattr"):
+        return
+    paths = [source_dir]
+    for root, dirs, files in os.walk(source_dir):
+        paths.extend(os.path.join(root, name) for name in dirs + files)
+    for path in paths:
+        try:
+            names = os.listxattr(path, follow_symlinks=False)
+        except OSError:
+            continue
+        for name in names:
+            if name == "security.selinux":
+                continue
+            try:
+                os.removexattr(path, name, follow_symlinks=False)
+            except OSError:
+                pass
+
+
+def build_system_image(
+    source_dir: str,
+    output_image: str,
+    system_size: int,
+    staging_dir: Optional[str] = None,
+    file_contexts_path: Optional[str] = None,
+    stock_labels_path: Optional[str] = None,
+    logger=None,
+    mount_point: str = "/",
+    partition_dirs: Optional[dict[str, str]] = None,
+) -> int:
+    """
+    Builds an ext4 image of system_size bytes from source_dir. SELinux
+    file_contexts are generated into staging_dir unless file_contexts_path
+    is given, filling the ROM rules' gaps from stock_labels_path (a JSON
+    map of paths in source_dir to the labels their images had). Other
+    partitions use their mount_point and share contexts and fs_config tables
+    from partition_dirs. Returns 0 on success.
+    """
+    log = logger or print
+    source_dir = Path(source_dir).resolve().as_posix()
+    output_image = Path(output_image).resolve().as_posix()
+
+    configure_environment()
+    mke2fs_bin = find_tool("mke2fs")
+    e2fsdroid_bin = find_tool("e2fsdroid")
+    if not mke2fs_bin:
+        log("Error: mke2fs executable not found")
+        return 1
+    if not e2fsdroid_bin:
+        log("Error: e2fsdroid executable not found")
+        return 1
+
+    if not os.path.isdir(source_dir):
+        log(f"Error: Source directory not found: {source_dir}")
+        return 1
+
+    _prepare_source(source_dir, mount_point)
+
+    work_dir = staging_dir or os.path.dirname(output_image) or "."
+    if not file_contexts_path:
+        file_contexts_path = _file_contexts(
+            source_dir, work_dir, stock_labels_path, mount_point,
+            partition_dirs,
+        )
+
+    blocks = system_size // BLOCK_SIZE
+    if blocks <= 0:
+        log(f"Error: Invalid system image size: {system_size}")
+        return 1
+
+    out_dir = os.path.dirname(output_image)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    with open(output_image, "wb"):
+        pass
+
+    env = os.environ.copy()
+    env["E2FSPROGS_FAKE_TIME"] = DEFAULT_TIMESTAMP
+
+    log(f"Formatting ext4 filesystem ({blocks} blocks of {BLOCK_SIZE} bytes)")
+    mke2fs_cmd = [
+        mke2fs_bin,
+        "-O",
+        "^has_journal",
+        "-L",
+        mount_point,
+        "-I",
+        "256",
+        "-M",
+        mount_point,
+        "-m",
+        "0",
+        "-t",
+        "ext4",
+        "-b",
+        str(BLOCK_SIZE),
+        output_image,
+        str(blocks),
+    ]
+    mke2fs_env = dict(env, MKE2FS_CONFIG=MKE2FS_CONFIG)
+    rc = _run_step("mke2fs", mke2fs_cmd, mke2fs_env, output_image, log)
+    if rc != 0:
+        return rc
+
+    log("Populating filesystem with e2fsdroid")
+    # -p adds the ROM's own fs_config tables (vendor uids, modes and
+    # capabilities) on top of the AOSP defaults e2fsdroid applies anyway.
+    e2fsdroid_cmd = [
+        e2fsdroid_bin,
+        "-e",
+        "-T",
+        DEFAULT_TIMESTAMP,
+        "-p",
+        Path(
+            _fs_config_root(source_dir, work_dir, partition_dirs)
+        ).resolve().as_posix(),
+    ]
+    if file_contexts_path and os.path.isfile(file_contexts_path):
+        e2fsdroid_cmd += ["-S", Path(file_contexts_path).resolve().as_posix()]
+    e2fsdroid_cmd += ["-f", source_dir, "-a", mount_point, output_image]
+    rc = _run_step("e2fsdroid", e2fsdroid_cmd, env, output_image, log)
+    if rc != 0:
+        return rc
+
+    if not os.path.isfile(output_image) or os.path.getsize(output_image) == 0:
+        log("Error: Output image is missing or empty after e2fsdroid")
+        return 1
+
+    size_mb = os.path.getsize(output_image) // (1024 * 1024)
+    log(f"Image created: {output_image} ({size_mb} MB)")
+    return 0
+
+
+def build_erofs_image(
+    source_dir: str,
+    output_image: str,
+    compressor: str,
+    staging_dir: Optional[str] = None,
+    file_contexts_path: Optional[str] = None,
+    stock_labels_path: Optional[str] = None,
+    logger=None,
+    mount_point: str = "/",
+    partition_dirs: Optional[dict[str, str]] = None,
+) -> int:
+    """
+    Builds an EROFS image from source_dir compressed with compressor (one
+    of EROFS_COMPRESSORS), sized to fit. Labels, owners, modes and
+    capabilities come from the same sources as build_system_image's.
+    Returns 0 on success.
+    """
+    log = logger or print
+    source_dir = Path(source_dir).resolve().as_posix()
+    output_image = Path(output_image).resolve().as_posix()
+
+    if compressor not in EROFS_COMPRESSORS:
+        log(f"Error: Unknown EROFS compressor: {compressor}")
+        return 1
+
+    configure_environment()
+    mkfs_bin = find_tool("mkfs.erofs")
+    if not mkfs_bin:
+        log("Error: mkfs.erofs executable not found")
+        return 1
+
+    if not os.path.isdir(source_dir):
+        log(f"Error: Source directory not found: {source_dir}")
+        return 1
+
+    _prepare_source(source_dir, mount_point)
+    _strip_host_xattrs(source_dir)
+
+    work_dir = staging_dir or os.path.dirname(output_image) or "."
+    if not file_contexts_path:
+        file_contexts_path = _file_contexts(
+            source_dir, work_dir, stock_labels_path, mount_point,
+            partition_dirs,
+        )
+
+    out_dir = os.path.dirname(output_image)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    log(f"Creating {compressor}-compressed EROFS filesystem")
+    # mkfs.erofs defaults to the host's page size (16K on Apple silicon),
+    # which devices with 4K pages can't mount. --product-out finds the ROM's
+    # fs_config tables the way e2fsdroid's -p does.
+    mkfs_cmd = [
+        mkfs_bin,
+        f"-z{compressor}",
+        "-b",
+        str(BLOCK_SIZE),
+        "-T",
+        DEFAULT_TIMESTAMP,
+        f"--mount-point={mount_point}",
+        "--product-out="
+        + Path(
+            _fs_config_root(source_dir, work_dir, partition_dirs)
+        ).resolve().as_posix(),
+    ]
+    if file_contexts_path and os.path.isfile(file_contexts_path):
+        mkfs_cmd.append(
+            "--file-contexts="
+            + Path(file_contexts_path).resolve().as_posix()
+        )
+    mkfs_cmd += [output_image, source_dir]
+    rc = _run_step(
+        "mkfs.erofs", mkfs_cmd, os.environ.copy(), output_image, log
+    )
+    if rc != 0:
+        return rc
+
+    if not os.path.isfile(output_image) or os.path.getsize(output_image) == 0:
+        log("Error: Output image is missing or empty after mkfs.erofs")
+        return 1
+
+    size_mb = os.path.getsize(output_image) // (1024 * 1024)
+    log(f"Image created: {output_image} ({size_mb} MB)")
+    return 0

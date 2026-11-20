@@ -1,0 +1,88 @@
+name: Build BrodGSI Binaries
+
+on:
+  push:
+    branches: [ "**" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: brodgsi-windows-x86_64
+            archive_ext: zip
+          - os: ubuntu-latest
+            artifact_name: brodgsi-linux-x86_64
+            archive_ext: tar.gz
+          - os: macos-latest
+            artifact_name: brodgsi-macos
+            archive_ext: tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libarchive-tools default-jre-headless aria2
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build Standalone Executables
+        run: |
+          python build_binaries.py
+
+      - name: Prepare Windows Archive
+        if: runner.os == 'Windows'
+        run: |
+          mkdir package
+          copy dist\brodgsi-gui.exe package\
+          copy dist\brodgsi-cli.exe package\
+          copy README.md package\
+          copy LICENSE package\
+          powershell Compress-Archive -Path package\* -DestinationPath ${{ matrix.artifact_name }}.zip
+
+      - name: Prepare Unix Archive (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir package
+          chmod +x dist/brodgsi-gui dist/brodgsi-cli
+          cp dist/brodgsi-gui dist/brodgsi-cli README.md LICENSE package/
+          tar -czvf ${{ matrix.artifact_name }}.tar.gz -C package .
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+          retention-days: 14
+
+      - name: Release Assets (on Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

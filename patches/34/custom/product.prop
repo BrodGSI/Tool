@@ -1,0 +1,41 @@
+ 
+# Brod starts here.
+
+# DroidX
+ro.droidx.maintainer=Brod GSI
+
+# RisingOS
+ro.rising.maintainer=Brod GSI
+
+# RiceDroid
+ro.rice.maintainer=Brod GSI
+
+# SuperiorOS
+ro.spos.maintainer=Brod GSI
+
+# LegionOS
+ro.legion.maintainer=Brod GSI
+
+# SkylineUI
+ro.skylineui.maintainer=Brod GSI
+
+# CherishOS
+ro.cherish.maintainer=Brod GSI
+
+# LessAOSP
+ro.lessaosp.maintainer=Brod GSI
+
+# PixelStar
+ro.pixelstar.maintainer=Brod GSI
+
+# MikuUI
+ro.miku.maintainer=Brod GSI
+
+# GhostDroid
+ro.ghost.maintainer=Brod GSI
+
+# ProjectMatrixx
+ro.matrixx.maintainer=Brod GSI
+
+# SparkOS
+ro.spark.maintainer=Brod GSI

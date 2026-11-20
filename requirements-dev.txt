@@ -1,0 +1,4 @@
+# Development tools: tests and lint.
+-r requirements.txt
+ruff>=0.11
+pyinstaller>=6.0

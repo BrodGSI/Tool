@@ -42,15 +42,7 @@ jobs:
             artifact_name: brodgsi-linux-x64
             archive_ext: tar.gz
 
-          # macOS x64 (Intel)
-          - os: macos-13
-            platform_name: macOS
-            arch: x64
-            artifact_name: brodgsi-macos-x64
-            archive_ext: tar.gz
-            allow_fail: true
-
-          # macOS ARM64 (Apple Silicon)
+          # macOS (Apple Silicon ARM64 & Universal) on fast macos-latest runner
           - os: macos-latest
             platform_name: macOS
             arch: arm64
@@ -87,6 +79,15 @@ jobs:
           python scripts/package.py --name ${{ matrix.artifact_name }}-standalone --format ${{ matrix.archive_ext }}
           python scripts/package.py --name ${{ matrix.artifact_name }} --format ${{ matrix.archive_ext }} --include-patches
 
+      # On macOS runner, also produce universal/x64 compatible package
+      - name: Build macOS Intel (x86_64) on Apple Silicon runner
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          arch -x86_64 python build_binaries.py --target-arch x86_64 || python build_binaries.py --target-arch universal2
+          python scripts/package.py --name brodgsi-macos-x64-standalone --format tar.gz
+          python scripts/package.py --name brodgsi-macos-x64 --format tar.gz --include-patches
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -94,6 +95,7 @@ jobs:
           path: |
             ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
             ${{ matrix.artifact_name }}-standalone.${{ matrix.archive_ext }}
+            brodgsi-macos-x64*.tar.gz
           retention-days: 14
 
   build-linux-arm64:

@@ -33,7 +33,13 @@ HIDDEN_IMPORTS = [
 ]
 
 
-def run_pyinstaller(name: str, entrypoint: str, is_gui: bool = False, onefile: bool = True):
+def run_pyinstaller(
+    name: str,
+    entrypoint: str,
+    is_gui: bool = False,
+    onefile: bool = True,
+    target_arch: str = None,
+):
     cmd = [
         sys.executable,
         "-m",
@@ -52,6 +58,9 @@ def run_pyinstaller(name: str, entrypoint: str, is_gui: bool = False, onefile: b
         cmd.append("--noconsole")
     else:
         cmd.append("--console")
+
+    if target_arch and sys.platform == "darwin":
+        cmd.extend(["--target-arch", target_arch])
 
     if sys.platform == "win32" and os.path.isfile("icon.ico"):
         cmd.extend(["--icon", "icon.ico"])
@@ -81,6 +90,7 @@ def main():
     parser.add_argument("--cli-only", action="store_true", help="Build only CLI binary")
     parser.add_argument("--gui-only", action="store_true", help="Build only GUI binary")
     parser.add_argument("--onedir", action="store_true", help="Build onedir instead of onefile")
+    parser.add_argument("--target-arch", help="Target architecture (macOS universal2/x86_64/arm64)")
     args = parser.parse_args()
 
     onefile = not args.onedir
@@ -102,10 +112,22 @@ def main():
     build_gui = not args.cli_only
 
     if build_cli:
-        run_pyinstaller("brodgsi-cli", "cli.py", is_gui=False, onefile=onefile)
+        run_pyinstaller(
+            "brodgsi-cli",
+            "cli.py",
+            is_gui=False,
+            onefile=onefile,
+            target_arch=args.target_arch,
+        )
 
     if build_gui:
-        run_pyinstaller("brodgsi-gui", "gui.py", is_gui=True, onefile=onefile)
+        run_pyinstaller(
+            "brodgsi-gui",
+            "gui.py",
+            is_gui=True,
+            onefile=onefile,
+            target_arch=args.target_arch,
+        )
 
     print("[*] Build completed! Executables are located in dist/")
 
